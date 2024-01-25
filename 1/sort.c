@@ -276,10 +276,13 @@ main(int argc, char** argv) {
     assert(integer_buffers.len == u8_buffers.len);
 
     /* IMPLEMENT MERGING OF THE SORTED ARRAYS HERE. */
+    for (isize i = 0; i < integer_buffers.len; i++) {
+        mergesort_integers(&integer_buffers.data[i]);
+    }
 
     for (isize i = 0; i < integer_buffers.len; i++) {
         char filename[512];
-        int n = sprintf(filename, "clone_of_%s", argv[i+1]);
+        int n = sprintf(filename, "sorted_%s", argv[i+1]);
         if (n < 0) {
             handle_error();
         }
@@ -291,22 +294,3 @@ main(int argc, char** argv) {
     return 0;
 }
 
-/* INTERMIDIATE TEST FOR READING/PARSING/WRITING
-
-python3 generator.py -f test1.txt -c 10000 -m 10000 && \
-python3 generator.py -f test2.txt -c 10000 -m 10000 && \
-python3 generator.py -f test3.txt -c 10000 -m 10000 && \
-python3 generator.py -f test4.txt -c 10000 -m 10000 && \
-python3 generator.py -f test5.txt -c 10000 -m 10000 && \
-python3 generator.py -f test6.txt -c 100000 -m 10000
-
-./run_sort test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt
-
-diff test1.txt clone_of_test1.txt && \
-diff test2.txt clone_of_test2.txt && \
-diff test3.txt clone_of_test3.txt && \
-diff test4.txt clone_of_test4.txt && \
-diff test5.txt clone_of_test5.txt && \
-diff test6.txt clone_of_test6.txt
-
- */
