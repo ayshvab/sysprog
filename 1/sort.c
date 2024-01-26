@@ -20,6 +20,17 @@ typedef ptrdiff_t isize;
         exit(-1);                                                                                                      \
     })
 
+#define countof(a)  (isize)(sizeof(a) / sizeof(*(a)))
+#define lengthof(s) (countof(s) - 1)
+
+#define string(s)                                                                                                      \
+    (struct string) { (u8*)s, lengthof(s) }
+
+struct string {
+    u8* data;
+    isize len;
+};
+
 /* Buffers */
 
 #define DECLARE_SLICE_HEADER(name, T)                                                                                  \
@@ -52,10 +63,39 @@ grow_(void* slice, isize size) {
 #define grow(s) grow_(s, sizeof(*(s)->data))
 #define push(s) ((s->len) >= (s)->cap ? grow(s), (s)->data + (s)->len++ : (s)->data + (s)->len++)
 
-DECLARE_SLICE_HEADER(integers, int);
 DECLARE_SLICE_HEADER(u8_buffer, u8);
-DECLARE_SLICE_HEADER(buffer_of_u8_buffers, struct u8_buffer);
-DECLARE_SLICE_HEADER(buffer_of_integer_buffers, struct integers);
+DECLARE_SLICE_HEADER(integers, int);
+DECLARE_SLICE_HEADER(many_u8_buffers, struct u8_buffer);
+DECLARE_SLICE_HEADER(many_integer_buffers, struct integers);
+
+/*  */
+
+void
+u8_buffer_append_string(struct u8_buffer* b, struct string s) {
+    for (int i = 0; i < s.len; i++) {
+        *push(b) = s.data[i];
+    }
+}
+
+void
+u8_buffer_append_int(struct u8_buffer* b, int value) {
+    isize nleft = b->cap - b->len;
+    while (nleft < 256) {
+        grow(b);
+        nleft = b->cap - b->len;
+    }
+    char* s = (char*)&b->data[b->len];
+    int n = snprintf(s, nleft, "%d", value);
+    if (n >= nleft) {
+        handle_error();
+    }
+    b->len += n;
+}
+
+void
+u8_buffer_clear(struct u8_buffer* b) {
+    b->len = 0;
+}
 
 void
 u8_buffer_write_fd(struct u8_buffer* b, int fd) {
@@ -245,6 +285,65 @@ mergesort_integers(struct integers* ints) {
     return;
 }
 
+/* Merge sorted arrays */
+
+/* Can simplify to just isize value */
+struct cursor {
+    isize index;
+};
+
+DECLARE_SLICE_HEADER(cursors, struct cursor);
+
+isize
+get_progress(struct cursors* cursors) {
+    isize result = 0;
+    for (int i = 0; i < cursors->len; i++) {
+        result += cursors->data[i].index;
+    }
+    return result;
+}
+
+void
+merge_sorted_and_write(struct many_integer_buffers* integer_buffers, int fd) {
+    assert(integer_buffers->len > 0);
+
+    struct u8_buffer b = {0};
+
+    isize total_len = 0;
+    struct cursors cursors = {0};
+    for (int i = 0; i < integer_buffers->len; i++) {
+        *push((&cursors)) = (struct cursor){0};
+        total_len += integer_buffers->data[i].len;
+    }
+
+    isize buffer_index = 0;
+    for (isize progress = 0; progress < total_len;) {
+        int value = INT_MAX;
+        for (int i = 0; i < integer_buffers->len; i++) {
+            struct integers* ints = &integer_buffers->data[i];
+            struct cursor* cursor = &cursors.data[i];
+            if (cursor->index < ints->len) {
+                if (ints->data[cursor->index] <= value) {
+                    value = ints->data[cursor->index];
+                    buffer_index = i;
+                }
+            }
+        }
+
+        u8_buffer_clear(&b);
+        if (progress > 0) {
+            u8_buffer_append_string(&b, string(" "));
+        }
+        u8_buffer_append_int(&b, value);
+        u8_buffer_write_fd(&b, fd);
+
+        cursors.data[buffer_index].index++;
+        progress++;
+    }
+
+    return;
+}
+
 int
 main(int argc, char** argv) {
     if (argc == 1) {
@@ -253,20 +352,23 @@ main(int argc, char** argv) {
     }
 
     /* TODO i want option to backing buffer with static array */
-    struct buffer_of_u8_buffers u8_buffers = {0};
+    struct many_u8_buffers u8_buffers = {0};
     for (isize i = 1; i < argc; i++) {
         int fd = open(argv[i], O_RDONLY);
 
         struct u8_buffer buffer = {0};
         struct read_result r = u8_buffer_read_fd_until_eof(&buffer, fd);
+        if (r.error) {
+            handle_error();
+        }
         assert(r.eof);
         *push((&u8_buffers)) = buffer;
 
         close(fd);
     }
-    assert(u8_buffers.len == argc-1);
+    assert(u8_buffers.len == argc - 1);
 
-    struct buffer_of_integer_buffers integer_buffers = {0};
+    struct many_integer_buffers integer_buffers = {0};
     for (isize i = 0; i < u8_buffers.len; i++) {
         struct integers ints = {0};
         struct parse_result r = parse(&u8_buffers.data[i], &ints);
@@ -280,17 +382,9 @@ main(int argc, char** argv) {
         mergesort_integers(&integer_buffers.data[i]);
     }
 
-    for (isize i = 0; i < integer_buffers.len; i++) {
-        char filename[512];
-        int n = sprintf(filename, "sorted_%s", argv[i+1]);
-        if (n < 0) {
-            handle_error();
-        }
-        int fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-        integers_write_fd(&integer_buffers.data[i], fd);
-        close(fd);
-    }
+    int fd = open("sorted.txt", O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+    merge_sorted_and_write(&integer_buffers, fd);
+    close(fd);
 
     return 0;
 }
-

@@ -16,12 +16,6 @@ generate_test_data:
 
 test_sort: sort
 	./run_sort test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt
-	python3 -m checker -f sorted_test1.txt && \
-	python3 -m checker -f sorted_test2.txt && \
-	python3 -m checker -f sorted_test3.txt && \
-	python3 -m checker -f sorted_test4.txt && \
-	python3 -m checker -f sorted_test5.txt && \
-	python3 -m checker -f sorted_test6.txt
-
+	python3 -m checker -f sorted.txt
 clean:
-	rm a.out run_sort test*.txt sorted*.txt
+	rm -f a.out run_sort test*.txt sorted*.txt
