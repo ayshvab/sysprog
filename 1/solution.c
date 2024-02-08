@@ -15,6 +15,14 @@
  */
 
 /* ========================================== */
+struct my_context {
+    /** ADD HERE YOUR OWN MEMBERS, SUCH AS FILE NAME, WORK TIME, ... */
+    isize id;
+	struct integers* ints;
+    char* name;
+    char* filename;
+};
+
 DECLARE_SLICE_HEADER(integers, int);
 DECLARE_SLICE_HEADER(integer_buffers, struct integers);
 
@@ -28,6 +36,8 @@ struct parse_result
 parse(struct u8_buffer* b, struct integers* ints) {
     struct parse_result r = {0};
     for (isize i = 0; i < b->len;) {
+		coro_yield();
+
         if (isspace(b->data[i])) {
             i++;
             continue;
@@ -75,6 +85,7 @@ mergesort_integers_merge_(int* sorted, int* tmp, struct span left_span, struct s
             tmp_begin[i + j] = right[j];
             j++;
         }
+		coro_yield();
     }
 
     for (int i = 0; i < len; i++) {
@@ -88,6 +99,7 @@ mergesort_integers_(int* sorted, int* tmp, struct span span) {
     if (span.len <= 1) {
         return span;
     }
+	coro_yield();
     isize half = span.len / 2;
     struct span left = {span.begin, half};
     struct span right = {span.begin + half, span.len - half};
@@ -152,13 +164,7 @@ merge_sorted_and_write(struct integer_buffers* integer_buffers, int fd) {
 
 /* ========================================== */
 
-struct my_context {
-    isize id;
-	struct integers* ints;
-    char* name;
-    /** ADD HERE YOUR OWN MEMBERS, SUCH AS FILE NAME, WORK TIME, ... */
-    char* filename;
-};
+
 
 static struct my_context*
 my_context_new(isize id, struct integers* ints, const char* name, char* filename) {
@@ -199,10 +205,10 @@ static int
 coroutine_func_f(void *context)
 {
 	/* IMPLEMENT SORTING OF INDIVIDUAL FILES HERE. */
-	// struct coro *this = coro_this();
-
+	struct coro *this = coro_this();
 	struct my_context *ctx = context;
-	// printf("Started coroutine %s, %s\n", ctx->name, ctx->filename);
+	printf("Started coroutine %s, %s\n", ctx->name, ctx->filename);
+	coro_yield();
 
 	char* name = ctx->name;	
 	char* filename = ctx->filename;
@@ -218,23 +224,11 @@ coroutine_func_f(void *context)
 	}
 
 	struct parse_result r = parse(&content, ctx->ints);
+	printf("%s: switch count %lld\n", name, coro_switch_count(this));
 	assert(!r.error);
+
 	sort_integers_using_mergesort(ctx->ints);
-
-/* 	
 	printf("%s: switch count %lld\n", name, coro_switch_count(this));
-	printf("%s: yield\n", name);
-	coro_yield();
-
-	printf("%s: switch count %lld\n", name, coro_switch_count(this));
-	printf("%s: yield\n", name);
-	coro_yield();
-
-	printf("%s: switch count %lld\n", name, coro_switch_count(this));
-	other_function(name, 1);
-	printf("%s: switch count after other function %lld\n", name,
-	       coro_switch_count(this)); 
-*/
 
 	free(content.data);
 	my_context_delete(ctx);
