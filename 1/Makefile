@@ -1,7 +1,13 @@
-GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant
+# GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant
+GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant -Wno-unused-function -Wno-unused-variable
 
-all: libcoro.c solution.c
-	gcc $(GCC_FLAGS) libcoro.c solution.c
+
+solution: libcoro.c solution.c
+	gcc $(GCC_FLAGS) -g libcoro.c solution.c -o solution
+
+test_solution: solution
+	./solution test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt
+	python3 -m checker -f sorted_by_solution.txt
 
 sort: sort.c
 	gcc $(GCC_FLAGS) sort.c -o run_sort
@@ -18,4 +24,4 @@ test_sort: sort
 	./run_sort test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt
 	python3 -m checker -f sorted.txt
 clean:
-	rm -f a.out run_sort test*.txt sorted*.txt
+	rm -f a.out solution run_sort test*.txt sorted*.txt
